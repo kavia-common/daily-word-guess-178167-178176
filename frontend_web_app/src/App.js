@@ -4,9 +4,12 @@ import './index.css';
 import Header from './components/Header';
 import Board from './components/Board';
 import Keyboard from './components/Keyboard';
+import Modal from './components/Modal';
+import HelpContent from './components/HelpContent';
+import StatsContent from './components/StatsContent';
 import { useGameEngine } from './hooks/useGameEngine';
 import { getRandomTarget, ALL_WORDS } from './utils/words';
-import { loadState, saveState, clearState } from './utils/storage';
+import { loadState, saveState, clearState, getStats } from './utils/storage';
 
 // PUBLIC_INTERFACE
 function App() {
@@ -15,6 +18,7 @@ function App() {
    * - Renders header, game board (6x5), and keyboard
    * - Uses Ocean Professional theme via CSS variables
    * - Handles win/lose states, new game, and persistence per session
+   * - Adds Help and Stats modals with accessibility, session stats persistence
    */
   const [theme, setTheme] = useState('light');
   const [ariaMessage, setAriaMessage] = useState('');
@@ -36,7 +40,14 @@ function App() {
     handleBackspace,
     handleEnter,
     resetGame,
+    onNewGame,
   } = useGameEngine({ target, dictionary: ALL_WORDS, rows: 6, cols: 5 });
+
+  // Modal state and focus return refs
+  const [isHelpOpen, setHelpOpen] = useState(false);
+  const [isStatsOpen, setStatsOpen] = useState(false);
+  const helpBtnRef = useRef(null);
+  const statsBtnRef = useRef(null);
 
   // Persist minimal game state for session resume
   useEffect(() => {
@@ -54,9 +65,10 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  // Keyboard listeners
+  // Keyboard listeners (disabled when modal open to prevent type behind)
   useEffect(() => {
     const onKeyDown = (e) => {
+      if (isHelpOpen || isStatsOpen) return;
       if (gameStatus !== 'playing' && e.key !== 'Enter') return;
 
       if (e.key === 'Enter') {
@@ -72,7 +84,7 @@ function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [gameStatus, handleEnter, handleBackspace, handleInput]);
+  }, [gameStatus, handleEnter, handleBackspace, handleInput, isHelpOpen, isStatsOpen]);
 
   // Announce important messages (win/lose/invalid)
   useEffect(() => {
@@ -98,7 +110,7 @@ function App() {
     const next = getRandomTarget();
     setTarget(next);
     clearState('gameState');
-    resetGame(next);
+    onNewGame(next);
     setAriaMessage('New game started.');
   };
 
@@ -119,6 +131,10 @@ function App() {
           onToggleTheme={toggleTheme}
           onNewGame={startNewGame}
           showNewGame={gameStatus !== 'playing'}
+          onOpenHelp={() => setHelpOpen(true)}
+          onOpenStats={() => setStatsOpen(true)}
+          helpBtnRef={helpBtnRef}
+          statsBtnRef={statsBtnRef}
         />
       </header>
 
@@ -151,6 +167,26 @@ function App() {
           Ocean Professional Theme • No external dependencies
         </span>
       </footer>
+
+      {/* Help Modal */}
+      <Modal
+        isOpen={isHelpOpen}
+        onClose={() => setHelpOpen(false)}
+        title="How to Play"
+        openerRef={helpBtnRef}
+      >
+        <HelpContent />
+      </Modal>
+
+      {/* Stats Modal */}
+      <Modal
+        isOpen={isStatsOpen}
+        onClose={() => setStatsOpen(false)}
+        title="Statistics"
+        openerRef={statsBtnRef}
+      >
+        <StatsContent stats={getStats()} />
+      </Modal>
     </div>
   );
 }

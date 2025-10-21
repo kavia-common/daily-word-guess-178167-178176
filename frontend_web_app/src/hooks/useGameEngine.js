@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { evaluateGuess } from '../utils/evaluateGuess';
+import { getStats, saveStats } from '../utils/storage';
 
 /**
  * useGameEngine
- * Handles board state, inputs, evaluation, key statuses, messages, and reset.
+ * Handles board state, inputs, evaluation, key statuses, messages, reset, and session stats updates.
  */
 // PUBLIC_INTERFACE
 export function useGameEngine({ target, dictionary, rows = 6, cols = 5 }) {
@@ -87,9 +88,27 @@ export function useGameEngine({ target, dictionary, rows = 6, cols = 5 }) {
           next[rowIndex][i].reveal = true;
           return next;
         });
-      }, 80 * i);
+      }, 120 * i); // slightly slower for smoother flip cascade
     }
   }, [cols]);
+
+  // Update and persist session stats
+  const applyStatsUpdate = useCallback((result) => {
+    const stats = getStats();
+    stats.gamesPlayed += 1;
+
+    if (result.type === 'win') {
+      stats.wins += 1;
+      stats.currentStreak += 1;
+      stats.maxStreak = Math.max(stats.maxStreak, stats.currentStreak);
+      const guessesIndex = Math.min(Math.max(1, result.guesses), 6) - 1;
+      stats.guessDistribution[guessesIndex] = (stats.guessDistribution[guessesIndex] || 0) + 1;
+    } else if (result.type === 'loss') {
+      stats.currentStreak = 0;
+    }
+
+    saveStats(stats);
+  }, []);
 
   const handleEnter = useCallback(() => {
     if (gameStatus !== 'playing' || evaluatingRef.current) return;
@@ -122,23 +141,27 @@ export function useGameEngine({ target, dictionary, rows = 6, cols = 5 }) {
       if (isWin) {
         setGameStatus('won');
         setTempMessage('Great job! You guessed it.');
+        applyStatsUpdate({ type: 'win', guesses: currentRow + 1 });
       } else if (currentRow + 1 >= rows) {
         setGameStatus('lost');
         setTempMessage(`The word was ${target.toUpperCase()}.`);
+        applyStatsUpdate({ type: 'loss' });
       } else {
         setCurrentRow((r) => r + 1);
         setCurrentCol(0);
       }
       evaluatingRef.current = false;
-    }, 80 * cols + 80);
+    }, 120 * cols + 140);
   }, [
     board, currentCol, currentRow, cols, dictionary, gameStatus,
-    revealRow, setTempMessage, rows, target, updateKeyStatuses
+    revealRow, setTempMessage, rows, target, updateKeyStatuses, applyStatsUpdate
   ]);
 
   // PUBLIC_INTERFACE
   const resetGame = useCallback((newTarget) => {
-    setBoard(Array.from({ length: rows }, () => Array.from({ length: cols }, () => ({ letter: '', status: null, reveal: false }))));
+    setBoard(Array.from({ length: rows }, () =>
+      Array.from({ length: cols }, () => ({ letter: '', status: null, reveal: false }))
+    ));
     setCurrentRow(0);
     setCurrentCol(0);
     setGameStatus('playing');
@@ -146,6 +169,12 @@ export function useGameEngine({ target, dictionary, rows = 6, cols = 5 }) {
     setRowShake(false);
     setKeyStatuses({});
   }, [rows, cols]);
+
+  // PUBLIC_INTERFACE
+  const onNewGame = useCallback((nextTarget) => {
+    // preserve stats; only reset board state
+    resetGame(nextTarget);
+  }, [resetGame]);
 
   return {
     board,
@@ -159,5 +188,6 @@ export function useGameEngine({ target, dictionary, rows = 6, cols = 5 }) {
     handleBackspace,
     handleEnter,
     resetGame,
+    onNewGame,
   };
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 
 /**
  * On-screen keyboard with letter, Enter, and Backspace keys.
@@ -11,6 +11,13 @@ export default function Keyboard({ onKey, onEnter, onBackspace, keyStatuses = {}
     'ASDFGHJKL'.split(''),
     ['ENTER', ...'ZXCVBNM'.split(''), '⌫'],
   ];
+  const pressedMapRef = useRef(new Map());
+
+  const handlePressVisual = (el, pressed) => {
+    if (!el) return;
+    if (pressed) el.classList.add('key--pressed');
+    else el.classList.remove('key--pressed');
+  };
 
   const renderKey = (label) => {
     const isEnter = label === 'ENTER';
@@ -24,6 +31,11 @@ export default function Keyboard({ onKey, onEnter, onBackspace, keyStatuses = {}
         key={label}
         type="button"
         className={`key ${statusClass} ${isEnter || isBack ? 'wide' : ''}`}
+        onMouseDown={(e) => handlePressVisual(e.currentTarget, true)}
+        onMouseUp={(e) => handlePressVisual(e.currentTarget, false)}
+        onMouseLeave={(e) => handlePressVisual(e.currentTarget, false)}
+        onTouchStart={(e) => handlePressVisual(e.currentTarget, true)}
+        onTouchEnd={(e) => handlePressVisual(e.currentTarget, false)}
         onClick={() => {
           if (disabled) return;
           if (isEnter) onEnter();
